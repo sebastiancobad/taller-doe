@@ -28,24 +28,24 @@ const NODES = {
     q: '¿Las variables independientes son proporciones que deben sumar a un total fijo?',
     note: 'La restricción Σxᵢ = 1 cambia la familia de diseños aplicable.',
     options: [
-      { label: 'Factores independientes', next: 'count_factors' },
-      { label: 'Componentes de mezcla con suma constante', next: 'mixture_branch' }
+      { label: 'Factores que se ajustan de forma independiente', next: 'count_factors' },
+      { label: 'Proporciones de una mezcla con suma constante', next: 'mixture_branch' }
     ]
   },
   mixture_branch: {
     q: '¿Hay variables de proceso (T, pH, tiempo) además de las proporciones?',
     note: 'Una mezcla con variables de proceso se estudia con un diseño cruzado.',
     options: [
-      { label: 'Solamente las proporciones', next: 'mixture_limits' },
-      { label: 'Proporciones más variable de proceso', leaf: 'mixture_process' }
+      { label: 'Solamente las proporciones de los componentes', next: 'mixture_limits' },
+      { label: 'Proporciones y una variable de proceso (T, pH)', leaf: 'mixture_process' }
     ]
   },
   mixture_limits: {
     q: '¿Cada componente puede tomar cualquier proporción entre 0 y 1?',
     note: 'Un límite inferior en los componentes reduce la región posible a un triángulo interior del simplex.',
     options: [
-      { label: 'Cada componente puede ir de 0 a 1', leaf: 'simplex' },
-      { label: 'Cada componente tiene una proporción mínima obligatoria', leaf: 'mixture_pseudo' }
+      { label: 'Cada componente puede ir de 0 a 1 sin límites', leaf: 'simplex' },
+      { label: 'Cada componente tiene una proporción mínima', leaf: 'mixture_pseudo' }
     ]
   },
   count_factors: {
@@ -61,43 +61,43 @@ const NODES = {
     q: '¿Existe una fuente de variabilidad sistemática (lotes, días, máquinas, jueces) que controlar?',
     note: 'Una fuente sistemática es candidata a factor de bloque para absorber variabilidad.',
     options: [
-      { label: 'Condiciones homogéneas, sin fuente sistemática', leaf: 'anova_one' },
-      { label: 'Hay una fuente de variabilidad controlable', leaf: 'rcbd' }
+      { label: 'Condiciones homogéneas sin fuente sistemática', leaf: 'anova_one' },
+      { label: 'Hay una fuente de variabilidad identificable', leaf: 'rcbd' }
     ]
   },
   few_factors: {
     q: '¿Cuál es el objetivo experimental con esos factores?',
     note: 'El objetivo determina el modelo, lineal con interacciones, cuadrático o con niveles fijos.',
     options: [
-      { label: 'Estimar efectos principales e interacciones (modelo lineal)', leaf: 'factorial_2k' },
-      { label: 'Encontrar las condiciones de operación que optimizan la respuesta', next: 'region_position' },
-      { label: 'Comparar tres niveles fijos por factor, de interés por sí mismos', leaf: 'factorial_3k' }
+      { label: 'Estimar efectos principales e interacciones (lineal)', leaf: 'factorial_2k' },
+      { label: 'Encontrar las condiciones que optimizan la respuesta', next: 'region_position' },
+      { label: 'Comparar tres niveles fijos de interés por factor', leaf: 'factorial_3k' }
     ]
   },
   region_position: {
     q: '¿Qué indican los datos sobre la ubicación de la región experimental respecto al óptimo?',
     note: 'La prueba de curvatura con puntos centrales decide si basta un plano o se necesita un modelo de segundo orden.',
     options: [
-      { label: 'Curvatura no significativa, la respuesta cambia como un plano', leaf: 'steepest' },
-      { label: 'Curvatura significativa, la región contiene la zona del óptimo', next: 'second_order' }
+      { label: 'Curvatura no significativa, la respuesta sigue un plano', leaf: 'steepest' },
+      { label: 'Curvatura significativa, la región contiene el óptimo', next: 'second_order' }
     ]
   },
   second_order: {
     q: '¿Qué restricción impone la región de operación al diseño de segundo orden?',
     note: 'La forma de la región decide entre un diseño simétrico y uno óptimo.',
     options: [
-      { label: 'Ninguna, los factores pueden salir a ±α fuera del cubo', leaf: 'ccd_rot' },
-      { label: 'Los niveles no pueden salir del intervalo de −1 a +1', leaf: 'ccd_face' },
-      { label: 'Las combinaciones extremas de todos los factores son inseguras', leaf: 'bbd' },
-      { label: 'Una restricción de operación elimina una parte de la región', leaf: 'd_optimal' }
+      { label: 'Ninguna, los factores pueden tomar niveles en ±α', leaf: 'ccd_rot' },
+      { label: 'Ningún factor puede salir del intervalo de −1 a +1', leaf: 'ccd_face' },
+      { label: 'Los vértices del cubo son inseguros o muy costosos', leaf: 'bbd' },
+      { label: 'Una restricción elimina una esquina de la región', leaf: 'd_optimal' }
     ]
   },
   many_factors: {
     q: 'Con muchos factores el factorial completo es costoso. ¿Qué prioriza el experimento ahora?',
     note: 'El protocolo estándar ejecuta primero el cribado y después la optimización.',
     options: [
-      { label: 'Identificar factores activos con mínimas corridas (cribado)', leaf: 'fractional' },
-      { label: 'Optimización con modelo cuadrático completo de todos los factores', leaf: 'rsm_warning' }
+      { label: 'Identificar los factores activos con pocas corridas', leaf: 'fractional' },
+      { label: 'Ajustar un modelo cuadrático con todos los factores', leaf: 'rsm_warning' }
     ]
   }
 };
@@ -446,15 +446,16 @@ const AUDIT_CASES = [
     },
     intro: 'Lee el extracto del informe del equipo. Haz clic en cada frase con error metodológico y asígnale la categoría desde el panel lateral.',
     spans: [
-      { id: 's1', text: 'El equipo ejecutó las 8 combinaciones del diseño 2³ ' },
-      { id: 's2', text: 'sin réplicas y sin aprovechar interacciones de alto orden como estimación del error', error: 'replicacion' },
-      { id: 's3', text: '. ' },
-      { id: 's4', text: 'Para la prueba de significancia aplicó una prueba t comparando las 4 corridas con A en nivel alto contra las 4 con A en nivel bajo, reportando p = 0.03 para A', error: 'prueba' },
-      { id: 's5', text: '. ' },
-      { id: 's6', text: 'Las corridas se ejecutaron siguiendo el orden estándar de Yates (− − −, − − +, − + −, ...) tal como aparecen en la matriz de diseño', error: 'aleatorizacion' },
-      { id: 's7', text: '. ' },
-      { id: 's8', text: 'En la discusión se concluye que solo el factor A es activo, sin examinar las interacciones AB, AC, BC ni el efecto ABC mediante una gráfica de probabilidad normal de efectos', error: 'modelo' },
-      { id: 's9', text: '.' }
+      { id: 's1', text: 'El protocolo fijó los niveles de A, B y C a partir de corridas preliminares, y el equipo ejecutó las 8 combinaciones del diseño 2³' },
+      { id: 's2', text: '. ' },
+      { id: 's3', text: 'Las 8 corridas se hicieron sin réplicas y sin usar las interacciones de alto orden como estimación del error experimental', error: 'replicacion' },
+      { id: 's4', text: '. ' },
+      { id: 's5', text: 'Para la significancia aplicó una prueba t entre las 4 corridas con A alto y las 4 con A bajo, y reportó p = 0.03 para A', error: 'prueba' },
+      { id: 's6', text: '. ' },
+      { id: 's7', text: 'Las corridas se ejecutaron en el orden estándar de Yates (− − −, − − +, − + −, ...) en que aparecen en la matriz de diseño', error: 'aleatorizacion' },
+      { id: 's8', text: '. ' },
+      { id: 's9', text: 'La discusión concluye que solo A es activo, sin examinar AB, AC, BC ni ABC en una gráfica de probabilidad normal de efectos', error: 'modelo' },
+      { id: 's10', text: '.' }
     ]
   },
   {
@@ -468,15 +469,15 @@ const AUDIT_CASES = [
     },
     intro: 'Lee el extracto del informe. Identifica los errores de la estrategia OVAT y de la aproximación al óptimo.',
     spans: [
-      { id: 's1', text: 'El equipo varió primero la temperatura con el tiempo fijo en 24 h y después el tiempo con la temperatura fija en el mejor valor encontrado' },
+      { id: 's1', text: 'El equipo varió primero la temperatura con el tiempo fijo en 24 h, y después el tiempo con la temperatura fija en el mejor valor encontrado en el barrido' },
       { id: 's2', text: '. ' },
       { id: 's3', text: 'El informe declara esa combinación como el óptimo del proceso, aunque el factorial posterior mostró una interacción T × t significativa', error: 'conclusion' },
       { id: 's4', text: '. ' },
-      { id: 's5', text: 'Los 3 puntos centrales dieron una media 6 g/L mayor que la media de los vértices, con curvatura significativa (p = 0.01), y el equipo calculó de todos modos una ruta de máxima pendiente con el modelo de primer orden', error: 'curvatura' },
+      { id: 's5', text: 'Los puntos centrales mostraron curvatura significativa (p = 0.01), y el equipo trazó de todos modos la ruta de máxima pendiente con el plano ajustado', error: 'curvatura' },
       { id: 's6', text: '. ' },
-      { id: 's7', text: 'La dirección de la ruta se obtuvo con los coeficientes del modelo ajustado en unidades reales, °C y h, y cada paso movió los dos factores en proporción a esos coeficientes', error: 'escala' },
+      { id: 's7', text: 'La dirección de la ruta salió de los coeficientes del modelo en unidades reales, °C y h, y cada paso movió los factores en esa proporción', error: 'escala' },
       { id: 's8', text: '. ' },
-      { id: 's9', text: 'La ruta se detuvo después de dos descensos consecutivos de la concentración' },
+      { id: 's9', text: 'La ruta avanzó con un experimento en cada paso, y el recorrido se detuvo después de dos descensos consecutivos de la concentración' },
       { id: 's10', text: '.' }
     ]
   },
@@ -491,11 +492,13 @@ const AUDIT_CASES = [
     },
     intro: 'Lee el extracto. Identifica errores de modelo, restricción y conclusión.',
     spans: [
+      { id: 's0', text: 'El diseño incluyó los tres componentes puros, las tres mezclas binarias 1/2, el centroide y tres mezclas axiales en el interior del triángulo' },
+      { id: 's0b', text: '. ' },
       { id: 's1', text: 'El investigador planteó como modelo y = β₀ + β₁x₁ + β₂x₂ + β₃x₃ + β₁₂x₁x₂ + β₁₃x₁x₃ + β₂₃x₂x₃ + β₁₁x₁² + β₂₂x₂² + β₃₃x₃²', error: 'modelo' },
       { id: 's2', text: '. ' },
-      { id: 's3', text: 'Reportó valores e intervalos de confianza individuales para β₀, β₁, β₂ y β₃ asumiendo independencia entre estos coeficientes y matriz de diseño no singular', error: 'restriccion' },
+      { id: 's3', text: 'Reportó intervalos de confianza individuales para β₀, β₁, β₂ y β₃, suponiendo coeficientes independientes y una matriz de diseño no singular', error: 'restriccion' },
       { id: 's4', text: '. ' },
-      { id: 's5', text: 'Como el R² ajustado superó 0.99, concluyó que la palma es el componente más relevante de la mezcla porque el valor absoluto de β₁ resultó el mayor entre los términos lineales', error: 'conclusion' },
+      { id: 's5', text: 'Con un R² ajustado mayor de 0.99, concluyó que la palma es el componente más relevante porque β₁ fue el mayor término lineal', error: 'conclusion' },
       { id: 's6', text: '.' }
     ]
   },
@@ -510,7 +513,7 @@ const AUDIT_CASES = [
     },
     intro: 'Lee el extracto del informe final. Identifica los errores de interpretación del modelo de segundo orden.',
     spans: [
-      { id: 's1', text: 'Se ajustó el modelo cuadrático completo y el análisis canónico arrojó un punto estacionario en T = 95 °C y t = 55 min, clasificado como máximo a partir de los valores propios negativos de la matriz B' },
+      { id: 's1', text: 'El modelo cuadrático completo y el análisis canónico dieron un punto estacionario en T = 95 °C y t = 55 min, que los valores propios negativos clasifican como máximo' },
       { id: 's2', text: '. ' },
       { id: 's3', text: 'La prueba de falta de ajuste con los 5 puntos centrales dio p = 0.004, y el equipo usó el modelo cuadrático sin cambios para localizar el óptimo', error: 'falta_ajuste' },
       { id: 's4', text: '. ' },
@@ -531,13 +534,13 @@ const AUDIT_CASES = [
     },
     intro: 'Lee el extracto. Identifica los errores en el tratamiento de las restricciones y en la lectura del modelo.',
     spans: [
-      { id: 's1', text: "Las proporciones se transformaron a pseudocomponentes con xᵢ' = (xᵢ − Lᵢ) / 0.3 antes de construir el simplex centroide" },
+      { id: 's1', text: "Las proporciones se transformaron a pseudocomponentes con xᵢ' = (xᵢ − Lᵢ) / 0.3, y el simplex centroide se construyó sobre esas nuevas variables" },
       { id: 's2', text: '. ' },
       { id: 's3', text: 'El modelo de Scheffé se ajustó con las proporciones reales xᵢ y cada coeficiente lineal se reportó como la resistencia del componente puro', error: 'restriccion' },
       { id: 's4', text: '. ' },
       { id: 's5', text: 'Las 3 réplicas del centroide dieron una prueba de falta de ajuste significativa (p = 0.02), y el equipo mantuvo el modelo cuadrático para predecir', error: 'falta_ajuste' },
       { id: 's6', text: '. ' },
-      { id: 's7', text: 'Como b₁ fue el mayor coeficiente lineal, el informe concluyó que más cemento aumenta la resistencia en cualquier proporción, sin revisar la gráfica de trazas', error: 'conclusion' },
+      { id: 's7', text: 'Como b₁ fue el mayor coeficiente lineal, el informe concluyó que más cemento sube la resistencia en toda la región, sin la gráfica de trazas', error: 'conclusion' },
       { id: 's8', text: '.' }
     ]
   }
