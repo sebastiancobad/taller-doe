@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 
 const TEACHER_PASSWORD = 'doe2026';
-const STORAGE_PREFIX = 'doe_taller_v5:';
+const STORAGE_PREFIX = 'doe_taller_v6:';
 const MIN_JUST = 20;
 
 const C = {
@@ -34,15 +34,23 @@ const NODES = {
   },
   mixture_branch: {
     q: '¿Hay variables de proceso (T, pH, tiempo) además de las proporciones?',
-    note: 'Solo proporciones implica un simplex puro. Mezcla más proceso requiere un diseño cruzado.',
+    note: 'Una mezcla con variables de proceso se estudia con un diseño cruzado.',
     options: [
-      { label: 'Solamente las proporciones', leaf: 'simplex' },
+      { label: 'Solamente las proporciones', next: 'mixture_limits' },
       { label: 'Proporciones más variable de proceso', leaf: 'mixture_process' }
+    ]
+  },
+  mixture_limits: {
+    q: '¿Cada componente puede tomar cualquier proporción entre 0 y 1?',
+    note: 'Un límite inferior en los componentes reduce la región posible a un triángulo interior del simplex.',
+    options: [
+      { label: 'Cada componente puede ir de 0 a 1', leaf: 'simplex' },
+      { label: 'Cada componente tiene una proporción mínima obligatoria', leaf: 'mixture_pseudo' }
     ]
   },
   count_factors: {
     q: '¿Cuántos factores controlables hay en el experimento?',
-    note: 'El número de factores determina la familia: simple, factorial, fraccionado.',
+    note: 'El número de factores determina la familia de diseños aplicable.',
     options: [
       { label: 'Un solo factor', next: 'one_factor' },
       { label: '2 o 3 factores', next: 'few_factors' },
@@ -51,7 +59,7 @@ const NODES = {
   },
   one_factor: {
     q: '¿Existe una fuente de variabilidad sistemática (lotes, días, máquinas, jueces) que controlar?',
-    note: 'Una fuente sistemática es candidato a factor de bloque para absorber variabilidad.',
+    note: 'Una fuente sistemática es candidata a factor de bloque para absorber variabilidad.',
     options: [
       { label: 'Condiciones homogéneas, sin fuente sistemática', leaf: 'anova_one' },
       { label: 'Hay una fuente de variabilidad controlable', leaf: 'rcbd' }
@@ -59,18 +67,36 @@ const NODES = {
   },
   few_factors: {
     q: '¿Cuál es el objetivo experimental con esos factores?',
-    note: 'El objetivo determina el modelo: lineal con interacciones, cuadrático o categórico.',
+    note: 'El objetivo determina el modelo, lineal con interacciones, cuadrático o con niveles fijos.',
     options: [
       { label: 'Estimar efectos principales e interacciones (modelo lineal)', leaf: 'factorial_2k' },
-      { label: 'Ajustar un modelo cuadrático completo para optimización', leaf: 'rsm' },
-      { label: 'Capturar curvatura con tres niveles fijos por factor', leaf: 'factorial_3k' }
+      { label: 'Encontrar las condiciones de operación que optimizan la respuesta', next: 'region_position' },
+      { label: 'Comparar tres niveles fijos por factor, de interés por sí mismos', leaf: 'factorial_3k' }
+    ]
+  },
+  region_position: {
+    q: '¿Qué indican los datos sobre la ubicación de la región experimental respecto al óptimo?',
+    note: 'La prueba de curvatura con puntos centrales decide si basta un plano o se necesita un modelo de segundo orden.',
+    options: [
+      { label: 'Curvatura no significativa, la respuesta cambia como un plano', leaf: 'steepest' },
+      { label: 'Curvatura significativa, la región contiene la zona del óptimo', next: 'second_order' }
+    ]
+  },
+  second_order: {
+    q: '¿Qué restricción impone la región de operación al diseño de segundo orden?',
+    note: 'La forma de la región decide entre un diseño simétrico y uno óptimo.',
+    options: [
+      { label: 'Ninguna, los factores pueden salir a ±α fuera del cubo', leaf: 'ccd_rot' },
+      { label: 'Los niveles no pueden salir del intervalo de −1 a +1', leaf: 'ccd_face' },
+      { label: 'Las combinaciones extremas de todos los factores son inseguras', leaf: 'bbd' },
+      { label: 'Una restricción de operación elimina una parte de la región', leaf: 'd_optimal' }
     ]
   },
   many_factors: {
     q: 'Con muchos factores el factorial completo es costoso. ¿Qué prioriza el experimento ahora?',
-    note: 'El protocolo estándar es screening primero, optimización después.',
+    note: 'El protocolo estándar ejecuta primero el cribado y después la optimización.',
     options: [
-      { label: 'Identificar factores activos con mínimas corridas (screening)', leaf: 'fractional' },
+      { label: 'Identificar factores activos con mínimas corridas (cribado)', leaf: 'fractional' },
       { label: 'Optimización con modelo cuadrático completo de todos los factores', leaf: 'rsm_warning' }
     ]
   }
@@ -80,25 +106,40 @@ const DESIGNS = {
   anova_one: { name: 'ANOVA de un factor', eq: 'yᵢⱼ = μ + τᵢ + εᵢⱼ',
     note: 'Comparación de medias de a tratamientos con n réplicas por tratamiento.' },
   rcbd: { name: 'Diseño de bloques completos al azar', eq: 'yᵢⱼ = μ + τᵢ + βⱼ + εᵢⱼ',
-    note: 'El bloque βⱼ absorbe variabilidad sistemática del lote, día, juez u operario.' },
+    note: 'El bloque βⱼ absorbe la variabilidad sistemática del lote, día, juez u operario.' },
   factorial_2k: { name: 'Factorial 2^k completo', eq: 'y = β₀ + Σ βᵢxᵢ + Σ βᵢⱼxᵢxⱼ + ε',
-    note: 'Cada factor en niveles −1 y +1. Captura efectos principales e interacciones.' },
+    note: 'Cada factor se estudia en los niveles −1 y +1. El modelo estima efectos principales e interacciones.' },
   factorial_3k: { name: 'Factorial 3^k', eq: 'y = β₀ + Σ βᵢxᵢ + Σ βᵢᵢxᵢ² + Σ βᵢⱼxᵢxⱼ + ε',
-    note: 'Tres niveles fijos por factor. Captura curvatura sin puntos axiales adicionales.' },
-  rsm: { name: 'Diseño de superficie de respuesta (CCD o Box-Behnken)',
+    note: 'Cada factor toma tres niveles fijos. El diseño estima la curvatura sin puntos axiales.' },
+  steepest: { name: 'Factorial 2^k con puntos centrales y máxima pendiente',
+    eq: 'ŷ = b₀ + Σ bᵢxᵢ',
+    note: 'El plano ajustado en unidades codificadas define la ruta. Cada factor avanza con el signo de bᵢ y en proporción a su magnitud. La ruta se detiene tras dos descensos consecutivos y el mejor punto pasa a ser el nuevo centro.' },
+  ccd_rot: { name: 'Diseño central compuesto rotable',
     eq: 'y = β₀ + Σ βᵢxᵢ + Σ βᵢᵢxᵢ² + Σ βᵢⱼxᵢxⱼ + ε',
-    note: 'CCD = factorial 2^k + 2k puntos axiales α + n_c puntos centrales. Ajusta el modelo cuadrático completo.' },
-  rsm_warning: { name: 'RSM directo con muchos factores', eq: '—',
-    note: 'Con cuatro o más factores, optimizar sin screening previo gasta corridas en factores inactivos. Procedimiento no recomendado.' },
+    note: 'El diseño combina el factorial 2^k, 2k puntos axiales a una distancia α = (2^k)^¼ y C₀ puntos centrales. Cada factor toma cinco niveles.' },
+  ccd_face: { name: 'Diseño central compuesto centrado en las caras',
+    eq: 'y = β₀ + Σ βᵢxᵢ + Σ βᵢᵢxᵢ² + Σ βᵢⱼxᵢxⱼ + ε',
+    note: 'El diseño usa α = 1. Los puntos axiales quedan en el centro de cada cara, todas las corridas están entre −1 y +1 y cada factor toma tres niveles.' },
+  bbd: { name: 'Diseño de Box y Behnken',
+    eq: 'y = β₀ + Σ βᵢxᵢ + Σ βᵢᵢxᵢ² + Σ βᵢⱼxᵢxⱼ + ε',
+    note: 'Los puntos se ubican en el punto medio de las aristas del cubo y en el centro, sin vértices ni puntos axiales. Cada factor toma tres niveles y el diseño requiere k ≥ 3.' },
+  d_optimal: { name: 'Diseño D óptimo',
+    eq: 'max |XᵀX| sobre los puntos candidatos',
+    note: 'Un algoritmo elige entre los puntos candidatos de la región restringida el subconjunto que maximiza el determinante de XᵀX para el modelo propuesto.' },
+  rsm_warning: { name: 'Superficie de respuesta directa con muchos factores', eq: 'Sin modelo recomendado',
+    note: 'Con cuatro o más factores, la optimización sin cribado previo gasta corridas en factores inactivos. El procedimiento no se recomienda.' },
   fractional: { name: 'Factorial fraccionado 2^(k−p)',
     eq: 'y = β₀ + Σ βᵢxᵢ + interacciones (con confusión)',
-    note: 'Reduce 2^k a 2^(k−p) corridas. Resolución III, IV o V según los generadores elegidos.' },
+    note: 'El diseño reduce 2^k a 2^(k−p) corridas. La resolución III, IV o V depende de los generadores elegidos.' },
   simplex: { name: 'Diseño simplex con modelo de Scheffé',
     eq: 'y = Σ βᵢxᵢ + Σ βᵢⱼxᵢxⱼ',
-    note: 'Sin intercepto, sin cuadráticos puros. Σ xᵢ = 1 hace colineales esos términos.' },
-  mixture_process: { name: 'Diseño combinado de mezcla y proceso',
-    eq: 'y = Σ βᵢxᵢ + Σ βᵢⱼxᵢxⱼ + términos cruzados con variables de proceso',
-    note: 'Cruza simplex sobre componentes con factorial sobre variables de proceso.' }
+    note: 'El modelo de Scheffé no tiene intercepto ni términos cuadráticos puros, porque Σxᵢ = 1 los hace colineales.' },
+  mixture_pseudo: { name: 'Simplex en pseudocomponentes',
+    eq: "xᵢ' = (xᵢ − Lᵢ) / (1 − ΣLⱼ)",
+    note: 'Los límites inferiores Lᵢ reducen la región a un triángulo interior. Los pseudocomponentes de Kurotori convierten ese triángulo en un simplex completo donde se aplica el diseño de Scheffé.' },
+  mixture_process: { name: 'Diseño cruzado de mezcla y proceso',
+    eq: 'y = f(x) · g(z)',
+    note: 'En cada punto del diseño de las variables de proceso z se corre el diseño de mezclas completo de las proporciones x.' }
 };
 
 // =============== DIAGRAMAS SVG ===============
@@ -164,7 +205,7 @@ function DesignDiagram({ designKey }) {
           <text x="55" y="65" fontSize="10" textAnchor="middle" fill={mu} transform="rotate(-90 55 65)">X₂ (3 niveles)</text>
         </svg>
       );
-    case 'rsm':
+    case 'ccd_rot':
       return (
         <svg viewBox="0 0 240 140" style={{ width: '100%', maxWidth: 280 }}>
           <g transform="translate(70, 15)">
@@ -240,6 +281,78 @@ function DesignDiagram({ designKey }) {
           </g>
         </svg>
       );
+    case 'steepest':
+      return (
+        <svg viewBox="0 0 240 140" style={{ width: '100%', maxWidth: 280 }}>
+          {[0, 1, 2, 3].map(i => (
+            <line key={i} x1={40 + i*40} y1="130" x2={110 + i*40} y2="10" stroke={g} opacity="0.25"/>
+          ))}
+          <rect x="40" y="80" width="40" height="40" fill={gBg} stroke={g} strokeWidth="1.5"/>
+          {[[40,80],[80,80],[40,120],[80,120]].map(([x,y],i) => <circle key={i} cx={x} cy={y} r="4" fill={g}/>)}
+          <circle cx="60" cy="100" r="4" fill="white" stroke={g} strokeWidth="2"/>
+          <line x1="60" y1="100" x2="200" y2="28" stroke={C.coral} strokeWidth="2"/>
+          <polygon points="200,28 190,30 195,38" fill={C.coral}/>
+          {[[95,82],[130,64],[165,46]].map(([x,y],i) => <circle key={`r${i}`} cx={x} cy={y} r="3.5" fill={C.coral}/>)}
+          <text x="150" y="128" fontSize="10" textAnchor="middle" fill={mu}>Ruta perpendicular a los contornos</text>
+        </svg>
+      );
+    case 'ccd_face':
+      return (
+        <svg viewBox="0 0 240 140" style={{ width: '100%', maxWidth: 280 }}>
+          <g transform="translate(70, 15)">
+            <rect x="0" y="0" width="100" height="100" fill={gBg} stroke={g} strokeWidth="2"/>
+            {[[0,0],[100,0],[0,100],[100,100]].map(([x,y],i) => <circle key={`c${i}`} cx={x} cy={y} r="5" fill={g}/>)}
+            {[[50,0],[50,100],[0,50],[100,50]].map(([x,y],i) => <circle key={`a${i}`} cx={x} cy={y} r="5" fill="white" stroke={g} strokeWidth="2"/>)}
+            <circle cx="50" cy="50" r="6" fill={g}/>
+          </g>
+          <text x="120" y="134" fontSize="10" textAnchor="middle" fill={mu}>α = 1, axiales en las caras</text>
+        </svg>
+      );
+    case 'bbd':
+      return (
+        <svg viewBox="0 0 240 140" style={{ width: '100%', maxWidth: 280 }}>
+          <g transform="translate(50, 12)">
+            <path d="M 50 0 L 130 0 L 130 60 L 50 60 Z" fill="none" stroke={g} opacity="0.35"/>
+            <path d="M 0 50 L 80 50 L 80 110 L 0 110 Z" fill="none" stroke={g} opacity="0.6"/>
+            <line x1="0" y1="50" x2="50" y2="0" stroke={g} opacity="0.5"/>
+            <line x1="80" y1="50" x2="130" y2="0" stroke={g} opacity="0.5"/>
+            <line x1="0" y1="110" x2="50" y2="60" stroke={g} opacity="0.5"/>
+            <line x1="80" y1="110" x2="130" y2="60" stroke={g} opacity="0.5"/>
+            {[[90,0],[130,30],[90,60],[50,30],[40,50],[80,80],[40,110],[0,80],[25,25],[105,25],[25,85],[105,85]].map(([x,y],i) => (
+              <circle key={i} cx={x} cy={y} r="4.5" fill={g}/>
+            ))}
+            <circle cx="65" cy="55" r="5" fill="white" stroke={g} strokeWidth="2"/>
+          </g>
+          <text x="120" y="136" fontSize="10" textAnchor="middle" fill={mu}>Puntos medios de las aristas, sin vértices</text>
+        </svg>
+      );
+    case 'd_optimal':
+      return (
+        <svg viewBox="0 0 240 140" style={{ width: '100%', maxWidth: 280 }}>
+          <g transform="translate(70, 15)">
+            <polygon points="0,0 60,0 100,40 100,100 0,100" fill={gBg} stroke={g} strokeWidth="2"/>
+            <polygon points="60,0 100,0 100,40" fill="none" stroke={C.coral} strokeDasharray="3,2"/>
+            {[[0,0],[60,0],[100,40],[100,100],[0,100],[50,100],[0,50],[80,20],[50,50]].map(([x,y],i) => (
+              <circle key={i} cx={x} cy={y} r="4.5" fill={g}/>
+            ))}
+          </g>
+          <text x="120" y="134" fontSize="10" textAnchor="middle" fill={mu}>Región con una esquina prohibida</text>
+        </svg>
+      );
+    case 'mixture_pseudo':
+      return (
+        <svg viewBox="0 0 240 140" style={{ width: '100%', maxWidth: 280 }}>
+          <g transform="translate(45, 8)">
+            <polygon points="80,10 10,115 150,115" fill="none" stroke={g} opacity="0.5"/>
+            <polygon points="80,40 30,103 130,103" fill={gBg} stroke={g} strokeWidth="2"/>
+            {[[80,40],[30,103],[130,103],[55,71],[105,71],[80,103],[80,82]].map(([x,y],i) => (
+              <circle key={i} cx={x} cy={y} r="4.5" fill={g}/>
+            ))}
+            <text x="80" y="6" fontSize="9" textAnchor="middle" fill={mu}>x₁ = 1</text>
+            <text x="80" y="132" fontSize="9" textAnchor="middle" fill={mu}>Región con límites inferiores</text>
+          </g>
+        </svg>
+      );
     case 'rsm_warning':
       return (
         <svg viewBox="0 0 240 140" style={{ width: '100%', maxWidth: 280 }}>
@@ -255,48 +368,69 @@ function DesignDiagram({ designKey }) {
   }
 }
 
-// =============== CASOS DETECTIVE (5) ===============
+// =============== CASOS DETECTIVE (8) ===============
 const CASES = [
   {
-    id: 'c1', area: 'Ingeniería de alimentos',
-    title: 'Caso 1 · Fermentación láctica con lotes de leche',
-    scenario: 'Una planta de yogur evalúa 5 cepas de cultivo láctico midiendo el porcentaje de acidez alcanzado a las 6 horas. La leche disponible proviene de 4 lotes de proveedor distintos, y cada lote afecta sistemáticamente la cinética de fermentación. Presupuesto para 20 corridas.',
+    id: 'c1', area: 'Ingeniería ambiental',
+    title: 'Caso 1 · Coagulantes en una planta de potabilización',
+    scenario: 'Una planta de potabilización compara 4 coagulantes midiendo la turbidez residual del agua tratada en una prueba de jarras. El agua cruda cambia de un día a otro por las lluvias, y la turbidez inicial de cada día afecta de forma sistemática la eficiencia de todos los coagulantes. El laboratorio dispone de 5 días de ensayo y prueba los 4 coagulantes cada día, para un total de 20 corridas.',
     expected: 'rcbd', expectedPath: ['count_factors', 'one_factor']
   },
   {
-    id: 'c2', area: 'Ingeniería de alimentos',
-    title: 'Caso 2 · Formulación de yogur firme',
-    scenario: 'Un equipo de I+D formula un yogur combinando tres estabilizantes (gelatina, almidón modificado, pectina) cuyas proporciones deben sumar 1. El objetivo es maximizar la firmeza del gel manteniendo el resto del proceso constante.',
-    expected: 'simplex', expectedPath: ['mixture_branch']
+    id: 'c2', area: 'Biotecnología',
+    title: 'Caso 2 · Producción de un pigmento por levadura',
+    scenario: 'Una planta produce un pigmento natural por fermentación con levadura a T = 30 °C y pH = 5.5. El equipo corrió un factorial 2² alrededor de esa condición con 4 puntos centrales. Los dos efectos principales resultaron significativos y la prueba de curvatura dio p = 0.47. El equipo quiere desplazar la operación hacia la región donde la concentración de pigmento sea mayor.',
+    expected: 'steepest', expectedPath: ['count_factors', 'few_factors', 'region_position']
   },
   {
-    id: 'c3', area: 'Ingeniería química',
-    title: 'Caso 3 · Extracción de aceite esencial',
-    scenario: 'Un ingeniero estudia la extracción de aceite esencial de cáscara de naranja con 6 factores controlables (temperatura, tiempo, ratio solvente, agitación, tamaño de partícula, humedad inicial). Sospecha que solo 2 o 3 son activos. Presupuesto máximo 16 corridas para identificar cuáles.',
+    id: 'c3', area: 'Ingeniería de alimentos',
+    title: 'Caso 3 · Formulación de yogur firme',
+    scenario: 'Un equipo de I+D formula el sistema estabilizante de un yogur con tres ingredientes, gelatina, almidón modificado y pectina, cuyas proporciones suman 1. Cada ingrediente puede ocupar cualquier fracción del sistema, desde 0 hasta la totalidad. El proceso de fermentación se mantiene constante y el objetivo es maximizar la firmeza del gel.',
+    expected: 'simplex', expectedPath: ['mixture_branch', 'mixture_limits']
+  },
+  {
+    id: 'c4', area: 'Ingeniería de materiales',
+    title: 'Caso 4 · Inyección de piezas de polipropileno',
+    scenario: 'Una empresa inyecta tapas de polipropileno y busca minimizar la contracción de la pieza con tres factores, temperatura de fundido, presión de sostenimiento y tiempo de enfriamiento. Un factorial con puntos centrales mostró curvatura significativa. La ficha técnica del material y los límites de la máquina impiden operar fuera de los niveles −1 y +1 del factorial, y todas las combinaciones dentro de ese cubo son operables.',
+    expected: 'ccd_face', expectedPath: ['count_factors', 'few_factors', 'region_position', 'second_order']
+  },
+  {
+    id: 'c5', area: 'Ingeniería química',
+    title: 'Caso 5 · Extracción de aceite esencial',
+    scenario: 'Un ingeniero estudia la extracción de aceite esencial de cáscara de naranja con 6 factores controlables, temperatura, tiempo, relación de solvente, agitación, tamaño de partícula y humedad inicial. Sospecha que solo 2 o 3 factores son activos y cuenta con un presupuesto máximo de 16 corridas para identificarlos.',
     expected: 'fractional', expectedPath: ['count_factors', 'many_factors']
   },
   {
-    id: 'c4', area: 'Ingeniería de alimentos',
-    title: 'Caso 4 · Optimización de fermentación de cerveza',
-    scenario: 'Tras un screening previo se identificaron 3 factores críticos en la fermentación primaria de cerveza artesanal (temperatura, pH inicial, gravedad inicial del mosto). El equipo ya operó cerca del óptimo y ahora necesita ajustar un modelo cuadrático completo para maximizar el contenido alcohólico.',
-    expected: 'rsm', expectedPath: ['count_factors', 'few_factors']
+    id: 'c6', area: 'Industria farmacéutica',
+    title: 'Caso 6 · Síntesis de un principio activo',
+    scenario: 'Un laboratorio farmacéutico optimiza el rendimiento de una síntesis con tres factores, temperatura, concentración del catalizador y tiempo de reacción. Un factorial previo con puntos centrales mostró curvatura significativa. La combinación simultánea de los tres niveles altos produce una reacción exotérmica descontrolada, y la de los tres niveles bajos no genera conversión medible.',
+    expected: 'bbd', expectedPath: ['count_factors', 'few_factors', 'region_position', 'second_order']
   },
   {
-    id: 'c5', area: 'Ingeniería de alimentos',
-    title: 'Caso 5 · Empaques y vida útil',
-    scenario: 'Un fabricante de pan tajado compara 4 tipos de empaque (PE, PP, BOPP metalizado, papel encerado) midiendo días hasta detección de mohos visibles. Se cuenta con 6 réplicas por empaque. Todas las muestras se almacenan en la misma cámara, mismas condiciones, mismo lote de pan.',
-    expected: 'anova_one', expectedPath: ['count_factors', 'one_factor']
+    id: 'c7', area: 'Ingeniería de alimentos',
+    title: 'Caso 7 · Secado por aspersión de extracto de café',
+    scenario: 'Una planta de café soluble ajusta un modelo cuadrático de la humedad del polvo con dos factores, temperatura del aire de entrada (160 a 220 °C) y caudal de alimentación (10 a 30 mL/min). Un ensayo previo con puntos centrales mostró curvatura significativa. Con temperatura mayor de 200 °C y caudal menor de 15 mL/min el polvo se quema, así que esa esquina de la región queda prohibida.',
+    expected: 'd_optimal', expectedPath: ['count_factors', 'few_factors', 'region_position', 'second_order']
+  },
+  {
+    id: 'c8', area: 'Ingeniería civil',
+    title: 'Caso 8 · Aglomerante con cenizas y escoria',
+    scenario: 'Una cementera formula un aglomerante con cemento x₁, ceniza volante x₂ y escoria x₃, con x₁ + x₂ + x₃ = 1. La norma exige al menos 0.5 de cemento, y la planta exige al menos 0.1 de ceniza y 0.1 de escoria. El curado se hace en condiciones normalizadas fijas y el objetivo es maximizar la resistencia a compresión a 28 días.',
+    expected: 'mixture_pseudo', expectedPath: ['mixture_branch', 'mixture_limits']
   }
 ];
 
-// =============== AUDITORIAS (3) ===============
+// =============== AUDITORIAS (5) ===============
 const AUDIT_TAGS = {
   replicacion: { label: 'Falta replicación', color: C.coral },
   aleatorizacion: { label: 'Falta aleatorización', color: C.amber },
   modelo: { label: 'Modelo incorrecto', color: C.purple },
   prueba: { label: 'Prueba estadística incorrecta', color: C.blue },
+  curvatura: { label: 'Curvatura ignorada', color: C.green },
+  escala: { label: 'Uso incorrecto de unidades codificadas', color: C.blue },
+  falta_ajuste: { label: 'Falta de ajuste ignorada', color: C.purple },
   extrapolacion: { label: 'Extrapolación injustificada', color: C.coral },
-  restriccion: { label: 'Restricción de mezcla ignorada', color: C.purple },
+  restriccion: { label: 'Restricción de mezcla ignorada', color: C.green },
   conclusion: { label: 'Conclusión injustificada por los datos', color: C.amber }
 };
 
@@ -306,8 +440,8 @@ const AUDIT_CASES = [
     title: 'Auditoría A · Extracción de pectina',
     context: {
       objetivo: 'Maximizar el rendimiento de extracción de pectina a partir de cáscara de limón.',
-      factores: 'A: temperatura (70 °C, 90 °C), B: pH (1.5, 2.5), C: tiempo (60 min, 120 min).',
-      respuesta: 'Rendimiento gravimétrico de pectina seca (g pectina / 100 g cáscara seca).',
+      factores: 'A, temperatura (70 °C, 90 °C). B, pH (1.5, 2.5). C, tiempo (60 min, 120 min).',
+      respuesta: 'Rendimiento gravimétrico de pectina seca (g de pectina por 100 g de cáscara seca).',
       diseno: 'Factorial 2³ planeado, 8 corridas únicas.'
     },
     intro: 'Lee el extracto del informe del equipo. Haz clic en cada frase con error metodológico y asígnale la categoría desde el panel lateral.',
@@ -317,48 +451,94 @@ const AUDIT_CASES = [
       { id: 's3', text: '. ' },
       { id: 's4', text: 'Para la prueba de significancia aplicó una prueba t comparando las 4 corridas con A en nivel alto contra las 4 con A en nivel bajo, reportando p = 0.03 para A', error: 'prueba' },
       { id: 's5', text: '. ' },
-      { id: 's6', text: 'Las corridas se ejecutaron siguiendo el orden estándar de Yates (- - -, - - +, - + -, ...) tal como aparecen en la matriz de diseño', error: 'aleatorizacion' },
+      { id: 's6', text: 'Las corridas se ejecutaron siguiendo el orden estándar de Yates (− − −, − − +, − + −, ...) tal como aparecen en la matriz de diseño', error: 'aleatorizacion' },
       { id: 's7', text: '. ' },
       { id: 's8', text: 'En la discusión se concluye que solo el factor A es activo, sin examinar las interacciones AB, AC, BC ni el efecto ABC mediante una gráfica de probabilidad normal de efectos', error: 'modelo' },
       { id: 's9', text: '.' }
     ]
   },
   {
-    id: 'a2', area: 'Ingeniería de alimentos',
-    title: 'Auditoría B · Mezcla de grasas en margarina',
+    id: 'a2', area: 'Biotecnología',
+    title: 'Auditoría B · OVAT y máxima pendiente en un biosurfactante',
     context: {
-      objetivo: 'Maximizar el punto de fusión de una margarina manteniendo perfil sensorial.',
-      factores: 'Tres grasas vegetales x₁ (palma), x₂ (soya), x₃ (algodón) con x₁ + x₂ + x₃ = 1.',
+      objetivo: 'Maximizar la concentración de un biosurfactante producido por fermentación.',
+      factores: 'T, temperatura (40 °C a 48 °C). t, tiempo de incubación (18 h a 30 h). La planta opera a 44 °C y 24 h.',
+      respuesta: 'Concentración de biosurfactante al final del lote (g/L).',
+      diseno: 'Estrategia OVAT inicial, factorial 2² con 3 puntos centrales y ruta de máxima pendiente.'
+    },
+    intro: 'Lee el extracto del informe. Identifica los errores de la estrategia OVAT y de la aproximación al óptimo.',
+    spans: [
+      { id: 's1', text: 'El equipo varió primero la temperatura con el tiempo fijo en 24 h y después el tiempo con la temperatura fija en el mejor valor encontrado' },
+      { id: 's2', text: '. ' },
+      { id: 's3', text: 'El informe declara esa combinación como el óptimo del proceso, aunque el factorial posterior mostró una interacción T × t significativa', error: 'conclusion' },
+      { id: 's4', text: '. ' },
+      { id: 's5', text: 'Los 3 puntos centrales dieron una media 6 g/L mayor que la media de los vértices, con curvatura significativa (p = 0.01), y el equipo calculó de todos modos una ruta de máxima pendiente con el modelo de primer orden', error: 'curvatura' },
+      { id: 's6', text: '. ' },
+      { id: 's7', text: 'La dirección de la ruta se obtuvo con los coeficientes del modelo ajustado en unidades reales, °C y h, y cada paso movió los dos factores en proporción a esos coeficientes', error: 'escala' },
+      { id: 's8', text: '. ' },
+      { id: 's9', text: 'La ruta se detuvo después de dos descensos consecutivos de la concentración' },
+      { id: 's10', text: '.' }
+    ]
+  },
+  {
+    id: 'a3', area: 'Ingeniería de alimentos',
+    title: 'Auditoría C · Mezcla de grasas en margarina',
+    context: {
+      objetivo: 'Maximizar el punto de fusión de una margarina manteniendo su perfil sensorial.',
+      factores: 'Tres grasas vegetales x₁ (palma), x₂ (soya) y x₃ (algodón), con x₁ + x₂ + x₃ = 1.',
       respuesta: 'Punto de fusión slip (°C).',
       diseno: 'Simplex centroide aumentado con 10 puntos.'
     },
     intro: 'Lee el extracto. Identifica errores de modelo, restricción y conclusión.',
     spans: [
-      { id: 's1', text: 'El investigador planteó como modelo: y = β₀ + β₁x₁ + β₂x₂ + β₃x₃ + β₁₂x₁x₂ + β₁₃x₁x₃ + β₂₃x₂x₃ + β₁₁x₁² + β₂₂x₂² + β₃₃x₃²', error: 'modelo' },
+      { id: 's1', text: 'El investigador planteó como modelo y = β₀ + β₁x₁ + β₂x₂ + β₃x₃ + β₁₂x₁x₂ + β₁₃x₁x₃ + β₂₃x₂x₃ + β₁₁x₁² + β₂₂x₂² + β₃₃x₃²', error: 'modelo' },
       { id: 's2', text: '. ' },
       { id: 's3', text: 'Reportó valores e intervalos de confianza individuales para β₀, β₁, β₂ y β₃ asumiendo independencia entre estos coeficientes y matriz de diseño no singular', error: 'restriccion' },
       { id: 's4', text: '. ' },
-      { id: 's5', text: 'Como R² ajustado superó 0.99, concluyó que el componente palma es el más relevante de la mezcla porque el valor absoluto de β₁ resultó el mayor entre los lineales', error: 'conclusion' },
+      { id: 's5', text: 'Como el R² ajustado superó 0.99, concluyó que la palma es el componente más relevante de la mezcla porque el valor absoluto de β₁ resultó el mayor entre los términos lineales', error: 'conclusion' },
       { id: 's6', text: '.' }
     ]
   },
   {
-    id: 'a3', area: 'Ingeniería química',
-    title: 'Auditoría C · Reactor catalítico con CCD',
+    id: 'a4', area: 'Ingeniería química',
+    title: 'Auditoría D · Reactor catalítico con DCC',
     context: {
       objetivo: 'Maximizar el rendimiento de un reactor catalítico de hidrogenación selectiva.',
-      factores: 'T: temperatura (60, 70, 80 °C), t: tiempo de residencia (20, 30, 40 min).',
+      factores: 'T, temperatura (60, 70, 80 °C). t, tiempo de residencia (20, 30, 40 min).',
       respuesta: 'Conversión a producto deseado (%).',
-      diseno: 'CCD con 4 puntos factoriales, 4 axiales (α = 1.414) y 5 centrales. Total: 13 corridas.'
+      diseno: 'DCC con 4 puntos factoriales, 4 axiales (α = 1.414) y 5 centrales, para un total de 13 corridas.'
     },
-    intro: 'Lee el extracto del informe final. Identifica los errores de interpretación del análisis canónico.',
+    intro: 'Lee el extracto del informe final. Identifica los errores de interpretación del modelo de segundo orden.',
     spans: [
-      { id: 's1', text: 'Se ajustó el modelo cuadrático completo y el análisis canónico arrojó un punto estacionario en T = 95 °C, t = 55 min, clasificado como máximo a partir de los autovalores negativos de la matriz B' },
+      { id: 's1', text: 'Se ajustó el modelo cuadrático completo y el análisis canónico arrojó un punto estacionario en T = 95 °C y t = 55 min, clasificado como máximo a partir de los valores propios negativos de la matriz B' },
       { id: 's2', text: '. ' },
-      { id: 's3', text: 'El equipo reportó las coordenadas (95 °C, 55 min) directamente como condición óptima recomendada para implementación industrial', error: 'extrapolacion' },
+      { id: 's3', text: 'La prueba de falta de ajuste con los 5 puntos centrales dio p = 0.004, y el equipo usó el modelo cuadrático sin cambios para localizar el óptimo', error: 'falta_ajuste' },
       { id: 's4', text: '. ' },
-      { id: 's5', text: 'No se ejecutaron corridas de verificación experimental ni se desplazó el centro del diseño hacia la región del óptimo predicho antes de reportar la recomendación', error: 'conclusion' },
-      { id: 's6', text: '.' }
+      { id: 's5', text: 'El equipo reportó T = 95 °C y t = 55 min directamente como condición óptima recomendada para implementación industrial', error: 'extrapolacion' },
+      { id: 's6', text: '. ' },
+      { id: 's7', text: 'No se ejecutaron corridas de verificación experimental ni se desplazó el centro del diseño hacia la región del óptimo predicho antes de reportar la recomendación', error: 'conclusion' },
+      { id: 's8', text: '.' }
+    ]
+  },
+  {
+    id: 'a5', area: 'Ingeniería civil',
+    title: 'Auditoría E · Aglomerante con límites en los componentes',
+    context: {
+      objetivo: 'Maximizar la resistencia a compresión de un aglomerante de cemento, ceniza volante y escoria.',
+      factores: 'x₁ (cemento) ≥ 0.5, x₂ (ceniza volante) ≥ 0.1 y x₃ (escoria) ≥ 0.1, con x₁ + x₂ + x₃ = 1.',
+      respuesta: 'Resistencia a compresión a 28 días (MPa).',
+      diseno: 'Simplex centroide de 7 puntos con 3 réplicas del centroide, para un total de 10 corridas.'
+    },
+    intro: 'Lee el extracto. Identifica los errores en el tratamiento de las restricciones y en la lectura del modelo.',
+    spans: [
+      { id: 's1', text: "Las proporciones se transformaron a pseudocomponentes con xᵢ' = (xᵢ − Lᵢ) / 0.3 antes de construir el simplex centroide" },
+      { id: 's2', text: '. ' },
+      { id: 's3', text: 'El modelo de Scheffé se ajustó con las proporciones reales xᵢ y cada coeficiente lineal se reportó como la resistencia del componente puro', error: 'restriccion' },
+      { id: 's4', text: '. ' },
+      { id: 's5', text: 'Las 3 réplicas del centroide dieron una prueba de falta de ajuste significativa (p = 0.02), y el equipo mantuvo el modelo cuadrático para predecir', error: 'falta_ajuste' },
+      { id: 's6', text: '. ' },
+      { id: 's7', text: 'Como b₁ fue el mayor coeficiente lineal, el informe concluyó que más cemento aumenta la resistencia en cualquier proporción, sin revisar la gráfica de trazas', error: 'conclusion' },
+      { id: 's8', text: '.' }
     ]
   }
 ];
@@ -404,10 +584,10 @@ function Home({ onSelect }) {
           Taller integrador
         </h1>
         <p className="text-base font-serif max-w-2xl mb-10" style={{ color: C.ink, lineHeight: 1.7, fontSize: 17 }}>
-          En este taller se recopila la información vista en el semestre. En la práctica
-          no solo se trata de usar un diseño de experimentos, sino de analizar un todo. Aquí
-          exploramos las múltiples posibilidades de decisión que enfrentamos en la industria
-          o en la academia cuando nos toca diseñar y leer un experimento.
+          Este taller integra los temas del semestre, desde la comparación de tratamientos
+          hasta la superficie de respuesta y los diseños de mezclas. Cada caso plantea una
+          decisión real de la industria o de la academia, en la elección del diseño o en la
+          lectura crítica de un informe experimental.
         </p>
         <button onClick={() => onSelect('student')}
           className="group px-10 py-5 rounded-full font-sans font-semibold text-lg flex items-center gap-3"
@@ -423,10 +603,10 @@ function Home({ onSelect }) {
         <div className="mt-14 grid grid-cols-2 gap-6 max-w-2xl">
           <FeatureCard icon={Compass} color={C.green}
             title="Parte 1 · DOE Detective"
-            text="Cinco escenarios. Navegas un árbol de decisiones diagnósticas y el sistema construye el diseño que tus respuestas implican. Justificación técnica requerida." />
+            text={`${CASES.length} escenarios. Recorres un árbol de preguntas diagnósticas y el sistema muestra el diseño que tus respuestas implican. Cada caso exige una justificación técnica.`} />
           <FeatureCard icon={Target} color={C.coral}
             title="Parte 2 · Auditoría"
-            text="Tres reportes con errores. Subrayas las frases problemáticas y las etiquetas con la categoría de error apropiada. Contexto experimental incluido." />
+            text={`${AUDIT_CASES.length} informes con errores metodológicos. Marcas cada frase con error y le asignas su categoría. Cada informe incluye su contexto experimental.`} />
         </div>
       </div>
       <div className="text-center pb-4">
@@ -891,7 +1071,7 @@ function DetectiveCase({ caseData, answer, onAnswer }) {
             <textarea value={justification}
               onChange={e => setJustification(e.target.value)}
               rows={4}
-              placeholder="Ej: El escenario presenta una variable de bloque (lote de leche) que introduce variabilidad sistemática..."
+              placeholder="Ej: El escenario presenta una fuente de variabilidad sistemática que conviene tratar como bloque..."
               style={{
                 width: '100%', padding: '12px 16px', borderRadius: 8,
                 border: `1px solid ${C.border}`, background: C.cream,
@@ -1378,9 +1558,9 @@ function TeacherFlow({ onExit }) {
     const summary = submissions.map(s => ({
       'Cédula': s.cedula, 'Nombre': s.name, 'Programa': s.program || '',
       'Fecha entrega': new Date(s.submittedAt).toLocaleString('es-CO'),
-      'Parte 1 (sobre 5)': s.score.detPoints.toFixed(2),
-      'Parte 2 (sobre 3)': s.score.audPoints.toFixed(2),
-      'Total auto (sobre 8)': s.score.auto.toFixed(2),
+      [`Parte 1 (sobre ${CASES.length})`]: s.score.detPoints.toFixed(2),
+      [`Parte 2 (sobre ${AUDIT_CASES.length})`]: s.score.audPoints.toFixed(2),
+      [`Total auto (sobre ${CASES.length + AUDIT_CASES.length})`]: s.score.auto.toFixed(2),
       'Nota sobre 5.0': s.score.scaled.toFixed(2),
       'Ajuste docente (-0.5 a +0.5)': '',
       'Nota final': ''
@@ -1405,7 +1585,7 @@ function TeacherFlow({ onExit }) {
           justifications.push({
             'Cédula': s.cedula, 'Nombre': s.name, 'Caso': c.id,
             'Título': c.title,
-            'Diseño elegido': DESIGNS[d.leaf]?.name || '—',
+            'Diseño elegido': DESIGNS[d.leaf]?.name || 'Sin respuesta',
             'Diseño correcto': DESIGNS[c.expected]?.name,
             'Acertó': d.leaf === c.expected ? 'SÍ' : 'NO',
             'Justificación': d.justification
@@ -1531,7 +1711,7 @@ function TeacherFlow({ onExit }) {
       ) : submissions.length === 0 ? (
         <div className="bg-white rounded-2xl p-12 text-center" style={{ border: `1px dashed ${C.border}` }}>
           <p className="font-sans" style={{ color: C.muted }}>
-            Aún no hay entregas. Comparte el enlace del artifact con tus estudiantes.
+            Aún no hay entregas. Comparte el enlace del taller con tus estudiantes.
           </p>
         </div>
       ) : (
@@ -1539,7 +1719,7 @@ function TeacherFlow({ onExit }) {
           <table className="w-full">
             <thead style={{ background: C.gray }}>
               <tr>
-                {['Cédula', 'Nombre', 'P1/5', 'P2/3', 'Total/8', 'Nota/5', 'Fecha', ''].map(h => (
+                {['Cédula', 'Nombre', `P1/${CASES.length}`, `P2/${AUDIT_CASES.length}`, `Total/${CASES.length + AUDIT_CASES.length}`, 'Nota/5', 'Fecha', ''].map(h => (
                   <th key={h} className="px-3 py-3 text-left font-sans text-xs uppercase tracking-widest" style={{ color: '#fff' }}>{h}</th>
                 ))}
               </tr>
@@ -1580,7 +1760,7 @@ function TeacherFlow({ onExit }) {
         <div className="font-semibold mb-2">Estructura del Excel descargable</div>
         <div style={{ color: C.ink }}>
           Hoja 1 (Resumen): nota lista con columnas vacías para tu ajuste manual.
-          Hoja 2 (Parte 1 detalle): diseño elegido vs correcto por caso.
+          Hoja 2 (Parte 1 detalle): diseño elegido y diseño correcto por caso.
           Hoja 3 (Parte 2 detalle): conteo de etiquetas correctas y erróneas.
           Hoja 4 (Justificaciones): cada justificación lista para revisar y bonificar.
         </div>

@@ -15,6 +15,10 @@ const firebaseConfig = {
   measurementId: "G-G4NHGR9WTY"
 };
 
+// Las entregas del semestre 2026-2 se guardan en la misma coleccion con el prefijo
+// TERM en el id del documento, para separarlas de las de 2026-1 sin cambiar las reglas.
+const TERM = '2026-2_';
+
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
@@ -22,8 +26,8 @@ const db = getFirestore(app);
 // para que el resto del codigo no cambie
 export const storage = {
   async set(key, value, shared = true) {
-    const cedula = key.replace(/^doe_taller_v5:/, '');
-    await setDoc(doc(db, 'submissions', cedula), {
+    const cedula = key.replace(/^doe_taller_v6:/, '');
+    await setDoc(doc(db, 'submissions', TERM + cedula), {
       payload: value,
       updatedAt: new Date().toISOString()
     });
@@ -31,21 +35,23 @@ export const storage = {
   },
 
   async get(key, shared = true) {
-    const cedula = key.replace(/^doe_taller_v5:/, '');
-    const snap = await getDoc(doc(db, 'submissions', cedula));
+    const cedula = key.replace(/^doe_taller_v6:/, '');
+    const snap = await getDoc(doc(db, 'submissions', TERM + cedula));
     if (!snap.exists()) throw new Error('Not found');
     return { key, value: snap.data().payload, shared };
   },
 
   async delete(key, shared = true) {
-    const cedula = key.replace(/^doe_taller_v5:/, '');
-    await deleteDoc(doc(db, 'submissions', cedula));
+    const cedula = key.replace(/^doe_taller_v6:/, '');
+    await deleteDoc(doc(db, 'submissions', TERM + cedula));
     return { key, deleted: true, shared };
   },
 
   async list(prefix = '', shared = true) {
     const snap = await getDocs(collection(db, 'submissions'));
-    const keys = snap.docs.map(d => `doe_taller_v5:${d.id}`);
+    const keys = snap.docs
+      .filter(d => d.id.startsWith(TERM))
+      .map(d => `doe_taller_v6:${d.id.slice(TERM.length)}`);
     return { keys, prefix, shared };
   }
 };
